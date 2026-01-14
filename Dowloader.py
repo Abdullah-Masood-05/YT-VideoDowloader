@@ -15,5 +15,5 @@ def download_video(url, resolution='1080p'):
         print(f"An error occurred: {e}")
 
 
-video_url = 'https://www.youtube.com/watch?v=aGiPeIoSfcw&ab_channel=ImranRiazKhan'
+video_url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'  # Replace with your video URL
 download_video(video_url, '1080p')  # Replace '1080p' with your desired resolution
