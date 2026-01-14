@@ -26,4 +26,3 @@ def download_video(url, resolution=1080):
 
 video_url = 'https://www.youtube.com/watch?v=8cgWyg8W6UM'
 download_video(video_url, 1080)
-
