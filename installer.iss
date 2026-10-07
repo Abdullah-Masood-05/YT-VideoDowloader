@@ -1,0 +1,69 @@
+; =====================================================================
+;  Inno Setup Script - YouTube Video Downloader
+;  Packages the Nuitka single-file exe + ffmpeg into a Windows installer.
+;  Build with: "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+; =====================================================================
+
+#define MyAppName "YouTube Video Downloader"
+#define MyAppVersion "2.0.0"
+#define MyAppPublisher "YTDownloader"
+#define MyAppURL "https://github.com/Abdullah-Masood-05/YT-VideoDowloader"
+#define MyAppExeName "YouTubeVideoDownloader.exe"
+#define MySourceDir "build_dist"
+#define MyFFmpegDir "ffmpeg"
+
+[Setup]
+; AppId uniquely identifies this application; do not change between versions.
+AppId={{A351DA37-959C-4480-A2E1-3B2E74FA8BDD}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} {#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}
+VersionInfoVersion=2.0.0.0
+VersionInfoProductName={#MyAppName}
+DefaultDirName={autopf}\{#MyAppName}
+DefaultGroupName={#MyAppName}
+DisableProgramGroupPage=yes
+; Admin install to Program Files by default; the user may choose a
+; per-user install instead.
+PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=dialog
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+OutputDir=installer_output
+OutputBaseFilename=YouTubeVideoDownloader-Setup-{#MyAppVersion}
+SetupIconFile=resources\icons\app.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayName={#MyAppName}
+Compression=lzma2/ultra64
+SolidCompression=yes
+LZMAUseSeparateProcess=yes
+WizardStyle=modern
+CloseApplications=yes
+RestartApplications=no
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+[Files]
+Source: "{#MySourceDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; ffmpeg must sit next to the exe; the app looks there first.
+Source: "{#MyFFmpegDir}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#MyFFmpegDir}\ffprobe.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+
+[Icons]
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"
