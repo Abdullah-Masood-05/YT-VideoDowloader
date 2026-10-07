@@ -1,188 +1,67 @@
 # YouTube Video Downloader
 
-This project allows you to download YouTube videos at a specified resolution using **`yt-dlp`**.
-It relies on **FFmpeg** to merge video and audio streams into a single **MP4** file.
+A Windows desktop app for downloading YouTube videos, audio and thumbnails, built on
+[yt-dlp](https://github.com/yt-dlp/yt-dlp) and PyQt6.
 
----
+![Dark theme](docs/screenshots/dark.png)
 
-## Requirements
+## Features
 
-* **Python 3.8+**
-* **FFmpeg (REQUIRED)**
-* **yt-dlp (Python library)**
+- Quality list built from what each video actually offers (no fake 4K options)
+- Video (MP4, optional H.264 for compatibility), audio (MP3, M4A, OPUS, WAV, FLAC) and thumbnail modes
+- Embedded cover art and metadata
+- Parallel downloads with progress, speed and ETA; download history
+- Saves to your Downloads folder by default
+- Dark theme by default, with a light theme switch
 
-⚠️ **FFmpeg must be installed before using this script.**
-Without FFmpeg, yt-dlp cannot merge video and audio streams.
+![Light theme](docs/screenshots/light.png)
 
----
+## Install
 
-## 1️⃣ Install FFmpeg (Required)
+Download `YouTubeVideoDownloader-Setup-<version>.exe` from
+[Releases](https://github.com/Abdullah-Masood-05/YT-VideoDowloader/releases) and run it.
+FFmpeg is bundled; nothing else is needed.
 
-FFmpeg is used internally by yt-dlp for merging and processing media files.
+## Development
 
-### Windows
-
-#### Winget
-
-```sh
-winget install "FFmpeg (Essentials Build)"
-```
-
-#### Chocolatey
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.12.
 
 ```sh
-choco install ffmpeg
+uv sync
+uv run main.py
 ```
 
----
+When running from source the app looks for `ffmpeg.exe` / `ffprobe.exe` in `ffmpeg\`,
+then on `PATH`. The bundled binaries are a minimal LGPL build of FFmpeg 7.1.1
+containing only what yt-dlp needs here (merging, audio conversion, thumbnail embedding).
 
-### macOS
+## Building
 
-#### Homebrew
+Requires MSVC (Visual Studio Build Tools) and [Inno Setup 6](https://jrsoftware.org/isinfo.php).
 
-```sh
-brew install ffmpeg
+```bat
+uv sync
+build.bat
 ```
 
----
+This compiles a single-file exe with Nuitka into `build_dist\` and the installer into
+`installer_output\`. Notes on the build flags are in `build.bat`.
 
-### Linux
+## Project layout
 
-#### Ubuntu / Debian
-
-```sh
-sudo apt update
-sudo apt install ffmpeg
+```
+main.py              main window
+theme.py             dark / light themes
+app_paths.py         paths for source and compiled builds
+config_manager.py    settings in %APPDATA%\YouTubeVideoDownloader
+download_manager.py  download queue
+widgets/             UI components
+workers/             fetch and download threads
+resources/icons/     app icon
+installer.iss        Inno Setup script
 ```
 
-#### Fedora
+## License
 
-```sh
-sudo dnf install ffmpeg
-```
-
-#### Arch Linux
-
-```sh
-sudo pacman -S ffmpeg
-```
-
----
-
-### Verify FFmpeg Installation
-
-```sh
-ffmpeg -version
-```
-
-If this command works, FFmpeg is correctly installed.
-
----
-
-## 2️⃣ Set Up a Python Virtual Environment (Recommended)
-
-Using a virtual environment keeps dependencies isolated and avoids conflicts.
-
-### Create the virtual environment
-
-```sh
-python -m venv venv
-```
-
----
-
-### Activate the virtual environment
-
-⚠️ **Activation command depends on how Python created the venv**
-
-#### Windows (PowerShell / Git Bash / MSYS)
-
-If your `venv` folder contains **`bin`** (as shown below), use:
-
-```sh
-venv\bin\activate
-```
-
-If your `venv` folder contains **`Scripts`**, use:
-
-```powershell
-.\venv\Scripts\Activate.ps1
-```
-
-Your reference output shows:
->
-> ```
-> venv/
-> ├── bin/
-> ├── include/
-> ├── lib/
-> └── pyvenv.cfg
-> ```
-
-✔ This means `venv\bin\activate` is the correct command.
-
----
-
-#### Linux / macOS
-
-```sh
-source venv/bin/activate
-```
-
----
-
-### Verify venv is active
-
-Your terminal prompt should change to:
-
-```text
-(venv)
-```
-
----
-
-## 3️⃣ Install yt-dlp
-
-Once the virtual environment is activated:
-
-```sh
-pip install -U yt-dlp
-```
-
-(Optional but recommended)
-
-```sh
-python -m pip install --upgrade pip
-```
-
----
-
-## 4️⃣ Usage
-
-1. Ensure **FFmpeg** is installed and accessible.
-2. Activate the **virtual environment**.
-3. Run the downloader script:
-
-```sh
-python Downloader.py
-```
-
-4. Replace the YouTube URL in the script with your desired video link.
-
-The downloaded video will be automatically saved as an **MP4 file**.
-
----
-
-## Notes
-
-* FFmpeg is mandatory for:
-
-  * Merging video + audio
-  * Producing MP4 output
-* If FFmpeg is missing:
-
-  * Downloads may fail
-  * Or video and audio may be saved separately
-* `yt-dlp` is actively maintained and frequently updated
-
----
+FFmpeg is licensed under LGPL-2.1-or-later; the bundled build also links LAME (LGPL)
+and libopus (BSD).
