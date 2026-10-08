@@ -27,6 +27,9 @@ jobs:
         shell: bash
     env:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
+      FFMPEG_REPO: Abdullah-Masood-05/ffmpeg-ytdl-minimal-build
+      FFMPEG_RELEASE: v1.1.0
+      FFMPEG_OPTIONAL: "true"  # TEMPORARY until the release exists
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,24 +43,29 @@ jobs:
           echo "dmg=YouTubeVideoDownloader-$VERSION-macos-arm64.dmg" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION"
 
-      # ── FFmpeg (minimal LGPL, static lame/opus) ──────────────────────────
-      - name: Cache FFmpeg build
-        id: ffmpeg-cache
-        uses: actions/cache@v4
-        with:
-          path: ffmpeg
-          key: ffmpeg-n7.1.1-macos-arm64-${{ hashFiles('packaging/macos/build_ffmpeg_macos.sh') }}
-
-      - name: Build FFmpeg
-        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+      # ── FFmpeg (prebuilt, from ffmpeg-ytdl-minimal-build) ───────────────
+      - name: Download FFmpeg
+        id: ffmpeg
         env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
-          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+          GH_TOKEN: ${{ github.token }}
         run: |
-          brew install lame opus pkgconf
-          packaging/macos/build_ffmpeg_macos.sh ffmpeg
+          mkdir -p ffmpeg
+          if [ "${FFMPEG_OPTIONAL:-}" = "true" ] && ! gh release view "$FFMPEG_RELEASE" -R "$FFMPEG_REPO" >/dev/null 2>&1; then
+            echo "::warning::$FFMPEG_REPO $FFMPEG_RELEASE not found; building without FFmpeg (TEMPORARY)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          gh release download "$FFMPEG_RELEASE" -R "$FFMPEG_REPO" -D ffmpeg \n            -p ffmpeg-macos-arm64 -p ffprobe-macos-arm64 -p SHA256SUMS.txt
+          cd ffmpeg
+          grep -E ' \*?(ffmpeg|ffprobe)-macos-arm64$' SHA256SUMS.txt > sums.txt
+          test "$(wc -l < sums.txt)" -eq 2
+          shasum -a 256 -c sums.txt
+          mv ffmpeg-macos-arm64 ffmpeg
+          mv ffprobe-macos-arm64 ffprobe
+          chmod +x ffmpeg ffprobe
+          rm -f sums.txt SHA256SUMS.txt
 
       - name: Check FFmpeg
+        if: steps.ffmpeg.outputs.skip != 'true'
         run: |
           for bin in ffmpeg/ffmpeg ffmpeg/ffprobe; do
             file "$bin"
@@ -106,8 +114,10 @@ jobs:
           test -f "$MACOS/resources/icons/app.png"
 
           echo ">> bundled ffmpeg"
-          "$MACOS/ffmpeg" -hide_banner -version | sed -n 1p
-          "$MACOS/ffprobe" -hide_banner -version | sed -n 1p
+          if [ "${{ steps.ffmpeg.outputs.skip }}" != "true" ]; then
+            "$MACOS/ffmpeg" -hide_banner -version | sed -n 1p
+            "$MACOS/ffprobe" -hide_banner -version | sed -n 1p
+          fi
 
           echo ">> launching app for 10s"
           export YTDL_CONFIG_DIR="$RUNNER_TEMP/ytdl-config"
