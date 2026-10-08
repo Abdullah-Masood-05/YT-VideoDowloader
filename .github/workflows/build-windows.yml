@@ -1,0 +1,237 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main, ci/windows]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ffmpeg:
+    name: FFmpeg (minimal LGPL, x64)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      # Keep LF endings so bash can run the shell script.
+      - run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - name: Restore cached FFmpeg
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ffmpeg
+          key: ffmpeg-windows-x64-${{ hashFiles('scripts/build_ffmpeg.sh') }}
+
+      - name: Set up MSYS2
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            make
+            diffutils
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-nasm
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-lame
+            mingw-w64-x86_64-opus
+            mingw-w64-x86_64-zlib
+
+      - name: Build ffmpeg.exe and ffprobe.exe
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        run: bash scripts/build_ffmpeg.sh ffmpeg
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          ffmpeg\ffmpeg.exe -hide_banner -version
+          if ($LASTEXITCODE) { exit 1 }
+          $bsfs = ffmpeg\ffmpeg.exe -hide_banner -bsfs
+          if (-not ($bsfs -match '^setts$')) { throw 'setts bsf missing' }
+          ffmpeg\ffprobe.exe -hide_banner -version
+          if ($LASTEXITCODE) { exit 1 }
+          Get-FileHash ffmpeg\*.exe -Algorithm SHA256 | Format-Table -AutoSize
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-windows-x64
+          path: |
+            ffmpeg/ffmpeg.exe
+            ffmpeg/ffprobe.exe
+          if-no-files-found: error
+
+  build:
+    name: Nuitka exe
+    runs-on: windows-latest
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        env:
+          UV_PYTHON_DOWNLOADS: never
+        run: uv sync --locked
+
+      - name: Read and check version
+        id: version
+        shell: pwsh
+        run: |
+          $version = uv run --no-sync python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
+          if (-not $version) { throw 'could not read version from pyproject.toml' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
+          # installer.iss hard-codes the version (its #define cannot be
+          # overridden from the ISCC command line), so make sure it agrees.
+          if (-not (Select-String -Path installer.iss -SimpleMatch "#define MyAppVersion `"$version`"" -Quiet)) {
+            throw "installer.iss MyAppVersion does not match pyproject version $version"
+          }
+          if ('${{ github.ref_type }}' -eq 'tag' -and '${{ github.ref_name }}' -ne "v$version") {
+            throw "tag ${{ github.ref_name }} does not match pyproject version $version"
+          }
+
+      - name: Cache Nuitka
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: nuitka-${{ runner.os }}-
+
+      - name: Compile with Nuitka (same flags as build.bat)
+        shell: cmd
+        run: >-
+          .venv\Scripts\python.exe -m nuitka
+          --onefile
+          --windows-console-mode=disable
+          --lto=no
+          --jobs=%NUMBER_OF_PROCESSORS%
+          --enable-plugin=pyqt6
+          --noinclude-custom-mode=yt_dlp.extractor:bytecode
+          --nofollow-import-to=unittest,test,pytest,_pytest,doctest,pdb
+          --nofollow-import-to=setuptools,pip,distutils,pkg_resources
+          --noinclude-setuptools-mode=nofollow
+          --python-flag=no_docstrings
+          --include-qt-plugins=sensible,styles,platforms
+          --include-data-files=resources\icons\app.ico=resources\icons\app.ico
+          --include-data-files=resources\icons\app.png=resources\icons\app.png
+          --windows-icon-from-ico=resources\icons\app.ico
+          --company-name="YTDownloader"
+          --product-name="YouTube Video Downloader"
+          --file-description="YouTube Video Downloader"
+          --file-version=${{ steps.version.outputs.version }}.0
+          --product-version=${{ steps.version.outputs.version }}.0
+          --copyright="Copyright (c) 2026 Abdullah Masood"
+          --assume-yes-for-downloads
+          --output-filename=YouTubeVideoDownloader.exe
+          --output-dir=build_dist
+          --remove-output
+          main.py
+
+      - name: Smoke test (launch, stay alive 10 s)
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path build_dist\YouTubeVideoDownloader.exe
+          Write-Host ("Size: {0:N1} MB" -f ((Get-Item $exe).Length / 1MB))
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 10
+          $alive = Get-Process -Name YouTubeVideoDownloader -ErrorAction SilentlyContinue
+          if (-not $alive) {
+            $p.Refresh()
+            throw "App exited early (exit code: $($p.ExitCode))"
+          }
+          Write-Host "Running processes:"; $alive | Format-Table Id, ProcessName, WorkingSet64 -AutoSize
+          $alive | Stop-Process -Force
+          Write-Host 'Smoke test passed.'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YouTubeVideoDownloader-exe
+          path: build_dist/YouTubeVideoDownloader.exe
+          if-no-files-found: error
+
+  package:
+    name: Installer
+    needs: [ffmpeg, build]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-windows-x64
+          path: ffmpeg
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: YouTubeVideoDownloader-exe
+          path: build_dist
+
+      - name: Assemble standalone folder
+        shell: pwsh
+        run: |
+          Copy-Item ffmpeg\ffmpeg.exe, ffmpeg\ffprobe.exe build_dist\
+          New-Item -ItemType Directory -Force release | Out-Null
+          Compress-Archive -Path build_dist\* -DestinationPath "release\YouTubeVideoDownloader-$env:VERSION-win64-portable.zip"
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE) { exit 1 }
+          }
+          & $iscc installer.iss
+          if ($LASTEXITCODE) { exit 1 }
+          Copy-Item "installer_output\YouTubeVideoDownloader-Setup-$env:VERSION.exe" release\
+          Get-ChildItem release | Format-Table Name, @{n='MB';e={'{0:N1}' -f ($_.Length / 1MB)}} -AutoSize
+          Get-FileHash release\* -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content release\SHA256SUMS-windows.txt
+          Get-Content release\SHA256SUMS-windows.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YouTubeVideoDownloader-windows-installer
+          path: release/YouTubeVideoDownloader-Setup-*.exe
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YouTubeVideoDownloader-windows-portable
+          path: release/*-win64-portable.zip
+          if-no-files-found: error
+
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/YouTubeVideoDownloader-Setup-*.exe
+            release/*-win64-portable.zip
+            release/SHA256SUMS-windows.txt
