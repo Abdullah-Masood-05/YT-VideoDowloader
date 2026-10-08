@@ -10,75 +10,25 @@ on:
 permissions:
   contents: read
 
+env:
+  # Prebuilt minimal LGPL FFmpeg from
+  # https://github.com/Abdullah-Masood-05/ffmpeg-ytdl-minimal-build
+  FFMPEG_REPO: Abdullah-Masood-05/ffmpeg-ytdl-minimal-build
+  FFMPEG_RELEASE: v1.0.0
+  FFMPEG_ASSET: ffmpeg.exe
+  FFPROBE_ASSET: ffprobe.exe
+
 concurrency:
   group: build-windows-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  ffmpeg:
-    name: FFmpeg (minimal LGPL, x64)
-    runs-on: windows-latest
-    timeout-minutes: 60
-    steps:
-      # Keep LF endings so bash can run the shell script.
-      - run: git config --global core.autocrlf false
-
-      - uses: actions/checkout@v4
-
-      - name: Restore cached FFmpeg
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: ffmpeg
-          key: ffmpeg-windows-x64-${{ hashFiles('scripts/build_ffmpeg.sh') }}
-
-      - name: Set up MSYS2
-        if: steps.cache.outputs.cache-hit != 'true'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            git
-            make
-            diffutils
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-nasm
-            mingw-w64-x86_64-pkgconf
-            mingw-w64-x86_64-lame
-            mingw-w64-x86_64-opus
-            mingw-w64-x86_64-zlib
-
-      - name: Build ffmpeg.exe and ffprobe.exe
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: msys2 {0}
-        run: bash scripts/build_ffmpeg.sh ffmpeg
-
-      - name: Smoke test
-        shell: pwsh
-        run: |
-          ffmpeg\ffmpeg.exe -hide_banner -version
-          if ($LASTEXITCODE) { exit 1 }
-          $bsfs = ffmpeg\ffmpeg.exe -hide_banner -bsfs
-          if (-not ($bsfs -match '^setts$')) { throw 'setts bsf missing' }
-          ffmpeg\ffprobe.exe -hide_banner -version
-          if ($LASTEXITCODE) { exit 1 }
-          Get-FileHash ffmpeg\*.exe -Algorithm SHA256 | Format-Table -AutoSize
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ffmpeg-windows-x64
-          path: |
-            ffmpeg/ffmpeg.exe
-            ffmpeg/ffprobe.exe
-          if-no-files-found: error
-
   build:
-    name: Nuitka exe
+    name: Windows exe + installer
     runs-on: windows-latest
     timeout-minutes: 60
-    outputs:
-      version: ${{ steps.version.outputs.version }}
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -165,40 +115,33 @@ jobs:
           $alive | Stop-Process -Force
           Write-Host 'Smoke test passed.'
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: YouTubeVideoDownloader-exe
-          path: build_dist/YouTubeVideoDownloader.exe
-          if-no-files-found: error
-
-  package:
-    name: Installer
-    needs: [ffmpeg, build]
-    runs-on: windows-latest
-    timeout-minutes: 30
-    permissions:
-      contents: write
-    env:
-      VERSION: ${{ needs.build.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: ffmpeg-windows-x64
-          path: ffmpeg
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: YouTubeVideoDownloader-exe
-          path: build_dist
-
-      - name: Assemble standalone folder
+      - name: Download FFmpeg (${{ env.FFMPEG_RELEASE }}) and verify SHA-256
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          Copy-Item ffmpeg\ffmpeg.exe, ffmpeg\ffprobe.exe build_dist\
-          New-Item -ItemType Directory -Force release | Out-Null
-          Compress-Archive -Path build_dist\* -DestinationPath "release\YouTubeVideoDownloader-$env:VERSION-win64-portable.zip"
+          $dl = Join-Path $env:RUNNER_TEMP ffmpeg-dl
+          gh release download $env:FFMPEG_RELEASE -R $env:FFMPEG_REPO -D $dl `
+            -p $env:FFMPEG_ASSET -p $env:FFPROBE_ASSET -p SHA256SUMS.txt
+          if ($LASTEXITCODE) { exit 1 }
+          $sums = @{}
+          foreach ($line in Get-Content (Join-Path $dl SHA256SUMS.txt)) {
+            if ($line -match '^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$') { $sums[$Matches[2]] = $Matches[1].ToLower() }
+          }
+          New-Item -ItemType Directory -Force ffmpeg | Out-Null
+          foreach ($pair in @(@($env:FFMPEG_ASSET, 'ffmpeg.exe'), @($env:FFPROBE_ASSET, 'ffprobe.exe'))) {
+            $asset, $target = $pair
+            $expected = $sums[$asset]
+            if (-not $expected) { throw "$asset not listed in SHA256SUMS.txt" }
+            $actual = (Get-FileHash (Join-Path $dl $asset) -Algorithm SHA256).Hash.ToLower()
+            if ($actual -ne $expected) { throw "SHA-256 mismatch for ${asset}: got $actual, expected $expected" }
+            Write-Host "OK  $actual  $asset -> ffmpeg\$target"
+            Copy-Item (Join-Path $dl $asset) (Join-Path ffmpeg $target)
+          }
+          ffmpegfmpeg.exe -hide_banner -version | Select-Object -First 1
+          if ($LASTEXITCODE) { exit 1 }
+          ffmpegfprobe.exe -hide_banner -version | Select-Object -First 1
+          if ($LASTEXITCODE) { exit 1 }
 
       - name: Build installer (Inno Setup)
         shell: pwsh
@@ -207,24 +150,24 @@ jobs:
           if (-not (Test-Path $iscc)) {
             choco install innosetup -y --no-progress
             if ($LASTEXITCODE) { exit 1 }
+            $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
           }
           & $iscc installer.iss
           if ($LASTEXITCODE) { exit 1 }
-          Copy-Item "installer_output\YouTubeVideoDownloader-Setup-$env:VERSION.exe" release\
-          Get-ChildItem release | Format-Table Name, @{n='MB';e={'{0:N1}' -f ($_.Length / 1MB)}} -AutoSize
-          Get-FileHash release\* -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content release\SHA256SUMS-windows.txt
-          Get-Content release\SHA256SUMS-windows.txt
+          Get-ChildItem build_dist\*.exe, installer_output\*.exe |
+            Format-Table Name, @{n='MB';e={'{0:N1}' -f ($_.Length / 1MB)}} -AutoSize
+          Get-FileHash build_dist\*.exe, installer_output\*.exe -Algorithm SHA256 | Format-Table Hash, Path -AutoSize
 
       - uses: actions/upload-artifact@v4
         with:
-          name: YouTubeVideoDownloader-windows-installer
-          path: release/YouTubeVideoDownloader-Setup-*.exe
+          name: YouTubeVideoDownloader-installer
+          path: installer_output/YouTubeVideoDownloader-Setup-*.exe
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
         with:
-          name: YouTubeVideoDownloader-windows-portable
-          path: release/*-win64-portable.zip
+          name: YouTubeVideoDownloader-exe
+          path: build_dist/YouTubeVideoDownloader.exe
           if-no-files-found: error
 
       - name: Attach to GitHub release
@@ -232,6 +175,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/YouTubeVideoDownloader-Setup-*.exe
-            release/*-win64-portable.zip
-            release/SHA256SUMS-windows.txt
+            installer_output/YouTubeVideoDownloader-Setup-*.exe
+            build_dist/YouTubeVideoDownloader.exe
