@@ -132,6 +132,9 @@ jobs:
             RC=0; wait "$PID" || RC=$?
             echo "::error::App exited early with code $RC"
             cat "$RUNNER_TEMP/app.log"
+            sleep 5
+            CRASH="$(ls -t ~/Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -n 1 || true)"
+            [ -z "$CRASH" ] || python3 packaging/macos/print_crash.py "$CRASH" || true
             exit 1
           fi
           cat "$RUNNER_TEMP/app.log"
