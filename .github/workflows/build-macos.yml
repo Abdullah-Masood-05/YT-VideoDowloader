@@ -54,7 +54,8 @@ jobs:
             echo "::warning::$FFMPEG_REPO $FFMPEG_RELEASE not found; building without FFmpeg (TEMPORARY)"
             echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          gh release download "$FFMPEG_RELEASE" -R "$FFMPEG_REPO" -D ffmpeg \n            -p ffmpeg-macos-arm64 -p ffprobe-macos-arm64 -p SHA256SUMS.txt
+          gh release download "$FFMPEG_RELEASE" -R "$FFMPEG_REPO" -D ffmpeg \
+            -p ffmpeg-macos-arm64 -p ffprobe-macos-arm64 -p SHA256SUMS.txt
           cd ffmpeg
           grep -E ' \*?(ffmpeg|ffprobe)-macos-arm64$' SHA256SUMS.txt > sums.txt
           test "$(wc -l < sums.txt)" -eq 2
