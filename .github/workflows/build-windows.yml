@@ -138,9 +138,9 @@ jobs:
             Write-Host "OK  $actual  $asset -> ffmpeg\$target"
             Copy-Item (Join-Path $dl $asset) (Join-Path ffmpeg $target)
           }
-          ffmpegfmpeg.exe -hide_banner -version | Select-Object -First 1
+          ffmpeg\ffmpeg.exe -hide_banner -version | Select-Object -First 1
           if ($LASTEXITCODE) { exit 1 }
-          ffmpegfprobe.exe -hide_banner -version | Select-Object -First 1
+          ffmpeg\ffprobe.exe -hide_banner -version | Select-Object -First 1
           if ($LASTEXITCODE) { exit 1 }
 
       - name: Build installer (Inno Setup)
