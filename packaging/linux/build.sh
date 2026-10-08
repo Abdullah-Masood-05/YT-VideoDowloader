@@ -18,7 +18,8 @@ PYTHON=${PYTHON:-.venv/bin/python}
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
-# Same trimming flags as build.bat (see docs/NUITKA_BUILD_NOTES.md), but
+# Same trimming flags as build.bat (see docs/NUITKA_BUILD_NOTES.md; there is
+# no "styles" Qt plugin family on Linux), but
 # --standalone: the packages install a folder, so there is no onefile
 # extraction step at every launch.
 "$PYTHON" -m nuitka \
@@ -31,7 +32,7 @@ mkdir -p "$OUT"
     --nofollow-import-to=setuptools,pip,distutils,pkg_resources \
     --noinclude-setuptools-mode=nofollow \
     --python-flag=no_docstrings \
-    --include-qt-plugins=sensible,styles,platforms,xcbglintegrations \
+    --include-qt-plugins=sensible,platforms,xcbglintegrations \
     --include-data-files=resources/icons/app.png=resources/icons/app.png \
     --include-data-files=resources/icons/app.ico=resources/icons/app.ico \
     --assume-yes-for-downloads \
