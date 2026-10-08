@@ -16,7 +16,7 @@ DEFAULTS = {
     "last_folder": "",
     "theme": "dark",
     "default_resolution": "1080",
-    "h264_enabled": False,
+    "h264_enabled": True,
     "download_mode": "video",
     "audio_format": "mp3",
     "audio_bitrate": "192",
