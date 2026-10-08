@@ -21,6 +21,21 @@ mkdir -p "$OUT"
 
 rm -rf "$OUT"/*.app "$OUT"/*.dist "$OUT"/*.build
 
+# Nuitka's options-nanny hard-fails on PyQt6 + macOS ("use PySide6 instead").
+# The app is PyQt6-based (shared with the Windows build), so downgrade that one
+# check to a warning in the build venv's copy of Nuitka's package config; the
+# CI smoke test verifies the resulting bundle actually starts.
+"$PYTHON" - <<'PY'
+import pathlib, nuitka
+cfg = pathlib.Path(nuitka.__file__).parent / "plugins/standard/standard.nuitka-package.config.yml"
+old = ("      - description: 'PyQt6 on macOS is not supported, use PySide6 instead'\n"
+       "        support_info: 'error'\n")
+text = cfg.read_text(encoding="utf-8")
+if old in text:
+    cfg.write_text(text.replace(old, old.replace("'error'", "'warning'")), encoding="utf-8")
+    print(">> patched Nuitka PyQt6/macOS check: error -> warning")
+PY
+
 # --mode=app-dist: standalone folder wrapped in an .app bundle (not onefile),
 # so files placed in Contents/MacOS are next to the binary and found by
 # app_paths.find_ffmpeg() via sys.argv[0].
