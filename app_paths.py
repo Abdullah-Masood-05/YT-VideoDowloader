@@ -35,7 +35,8 @@ def exe_dir():
         except (NameError, AttributeError):
             argv0 = None
         candidate = argv0 or sys.argv[0] or sys.executable
-        return os.path.dirname(os.path.abspath(candidate))
+        # realpath: /usr/bin/<app> is a symlink into /opt/<app> on Linux.
+        return os.path.dirname(os.path.realpath(candidate))
     return BUNDLE_DIR
 
 
@@ -127,6 +128,8 @@ def find_ffmpeg():
     name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
     candidates = [
         os.path.join(exe_dir(), name),
+        # Nuitka standalone (Linux packages): the dist folder itself.
+        os.path.join(BUNDLE_DIR, name),
         os.path.join(exe_dir(), "ffmpeg", name),
         os.path.join(BUNDLE_DIR, "ffmpeg", name),
     ]
