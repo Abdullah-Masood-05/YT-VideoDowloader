@@ -2,7 +2,7 @@ name: Build Windows
 
 on:
   push:
-    branches: [main, ci/windows]
+    branches: [main]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -14,9 +14,9 @@ env:
   # Prebuilt minimal LGPL FFmpeg from
   # https://github.com/Abdullah-Masood-05/ffmpeg-ytdl-minimal-build
   FFMPEG_REPO: Abdullah-Masood-05/ffmpeg-ytdl-minimal-build
-  FFMPEG_RELEASE: v1.0.0
-  FFMPEG_ASSET: ffmpeg.exe
-  FFPROBE_ASSET: ffprobe.exe
+  FFMPEG_RELEASE: v1.1.0
+  FFMPEG_ASSET: ffmpeg-windows-x86_64.exe
+  FFPROBE_ASSET: ffprobe-windows-x86_64.exe
 
 concurrency:
   group: build-windows-${{ github.ref }}
