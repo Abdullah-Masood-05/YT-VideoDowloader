@@ -1,6 +1,10 @@
 # YouTube Video Downloader
 
-A Windows desktop app for downloading YouTube videos, audio and thumbnails, built on
+[![Build Windows](https://github.com/Abdullah-Masood-05/YT-VideoDowloader/actions/workflows/build-windows.yml/badge.svg)](https://github.com/Abdullah-Masood-05/YT-VideoDowloader/actions/workflows/build-windows.yml)
+[![Build Linux packages](https://github.com/Abdullah-Masood-05/YT-VideoDowloader/actions/workflows/build-linux.yml/badge.svg)](https://github.com/Abdullah-Masood-05/YT-VideoDowloader/actions/workflows/build-linux.yml)
+[![Build macOS](https://github.com/Abdullah-Masood-05/YT-VideoDowloader/actions/workflows/build-macos.yml/badge.svg)](https://github.com/Abdullah-Masood-05/YT-VideoDowloader/actions/workflows/build-macos.yml)
+
+A desktop app for Windows, Linux and macOS for downloading YouTube videos, audio and thumbnails, built on
 [yt-dlp](https://github.com/yt-dlp/yt-dlp) and PyQt6.
 
 ![Dark theme](docs/screenshots/dark.png)
@@ -18,9 +22,20 @@ A Windows desktop app for downloading YouTube videos, audio and thumbnails, buil
 
 ## Install
 
-Download `YouTubeVideoDownloader-Setup-<version>.exe` from
-[Releases](https://github.com/Abdullah-Masood-05/YT-VideoDowloader/releases) and run it.
-FFmpeg is bundled; nothing else is needed.
+Download from [Releases](https://github.com/Abdullah-Masood-05/YT-VideoDowloader/releases).
+FFmpeg is bundled on every platform.
+
+| Platform | File |
+|---|---|
+| Windows 10/11 x64 | `YouTubeVideoDownloader-Setup-<version>.exe` (or the standalone `.exe`) |
+| Debian / Ubuntu | `youtube-video-downloader_<version>_amd64.deb` (`sudo apt install ./<file>.deb`) |
+| Fedora / openSUSE | `youtube-video-downloader-<version>-1.x86_64.rpm` (`sudo dnf install ./<file>.rpm`) |
+| Arch Linux | `youtube-video-downloader-<version>-1-x86_64.pkg.tar.zst` (`sudo pacman -U <file>`) |
+| macOS 11+ (Apple Silicon) | `YouTubeVideoDownloader-<version>-macos-arm64.dmg` (experimental) |
+
+The builds are not code-signed. On Windows, SmartScreen may warn. On macOS, right-click the app
+and choose **Open** the first time, or run
+`xattr -dr com.apple.quarantine "/Applications/YouTube Video Downloader.app"`.
 
 ## Development
 
@@ -45,7 +60,19 @@ build.bat
 ```
 
 This compiles a single-file exe with Nuitka into `build_dist\` and the installer into
-`installer_output\`. Notes on the build flags are in `build.bat`.
+`installer_output\`. Notes on the build flags are in `build.bat` and
+[docs/NUITKA_BUILD_NOTES.md](docs/NUITKA_BUILD_NOTES.md).
+
+CI builds every platform on each push to `main`, and pushing a `v*` tag attaches all
+installers and packages to the GitHub release:
+
+- Windows: Nuitka onefile exe + Inno Setup installer (`.github/workflows/build-windows.yml`)
+- Linux: Nuitka standalone build packaged as .deb, .rpm and .pkg.tar.zst, each installed and
+  launched in its own distro container (`packaging/linux/`)
+- macOS: PyInstaller app bundle in a DMG, because Nuitka does not support PyQt6 on macOS
+  (`packaging/macos/`)
+
+FFmpeg comes from [ffmpeg-ytdl-minimal-build](https://github.com/Abdullah-Masood-05/ffmpeg-ytdl-minimal-build).
 
 ## Project layout
 
@@ -59,6 +86,8 @@ widgets/             UI components
 workers/             fetch and download threads
 resources/icons/     app icon
 installer.iss        Inno Setup script
+packaging/           Linux and macOS packaging
+.github/workflows/   CI for Windows, Linux and macOS
 ```
 
 ## License
