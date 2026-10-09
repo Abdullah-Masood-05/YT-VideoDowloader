@@ -29,7 +29,6 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
       FFMPEG_REPO: Abdullah-Masood-05/ffmpeg-ytdl-minimal-build
       FFMPEG_RELEASE: v1.1.0
-      FFMPEG_OPTIONAL: "true"  # TEMPORARY until the release exists
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,10 +49,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p ffmpeg
-          if [ "${FFMPEG_OPTIONAL:-}" = "true" ] && ! gh release view "$FFMPEG_RELEASE" -R "$FFMPEG_REPO" >/dev/null 2>&1; then
-            echo "::warning::$FFMPEG_REPO $FFMPEG_RELEASE not found; building without FFmpeg (TEMPORARY)"
-            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
-          fi
           gh release download "$FFMPEG_RELEASE" -R "$FFMPEG_REPO" -D ffmpeg \
             -p ffmpeg-macos-arm64 -p ffprobe-macos-arm64 -p SHA256SUMS.txt
           cd ffmpeg
@@ -66,7 +61,6 @@ jobs:
           rm -f sums.txt SHA256SUMS.txt
 
       - name: Check FFmpeg
-        if: steps.ffmpeg.outputs.skip != 'true'
         run: |
           for bin in ffmpeg/ffmpeg ffmpeg/ffprobe; do
             file "$bin"
@@ -77,7 +71,7 @@ jobs:
           done
           ffmpeg/ffmpeg -hide_banner -version | sed -n 1p
 
-      # ── Python + Nuitka ─────────────────────────────────────────────────
+      # ── Python + PyInstaller ─────────────────────────────────────────────────
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -92,14 +86,9 @@ jobs:
           UV_PYTHON_PREFERENCE: only-system
         run: |
           uv sync --locked --python "$(which python)"
-          .venv/bin/python -m nuitka --version
-
-      - name: Cache Nuitka
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Caches/Nuitka
-          key: nuitka-macos-arm64-${{ hashFiles('uv.lock') }}
-          restore-keys: nuitka-macos-arm64-
+          # PyInstaller is a macOS build-only tool; not a project dependency.
+          uv pip install --python .venv/bin/python pyinstaller
+          .venv/bin/python -m PyInstaller --version
 
       - name: Build app bundle
         run: packaging/macos/build_app.sh "${{ steps.version.outputs.version }}" ffmpeg
@@ -112,21 +101,19 @@ jobs:
           EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
           ls -la "$MACOS" > "$RUNNER_TEMP/macos-dir.txt"; sed -n 1,60p "$RUNNER_TEMP/macos-dir.txt"
           file "$MACOS/$EXE"
-          test -f "$MACOS/resources/icons/app.png"
+          test -f "$APP/Contents/Frameworks/resources/icons/app.png"
 
           echo ">> bundled ffmpeg"
-          if [ "${{ steps.ffmpeg.outputs.skip }}" != "true" ]; then
-            "$MACOS/ffmpeg" -hide_banner -version | sed -n 1p
-            "$MACOS/ffprobe" -hide_banner -version | sed -n 1p
-          fi
+          "$MACOS/ffmpeg" -hide_banner -version | sed -n 1p
+          "$MACOS/ffprobe" -hide_banner -version | sed -n 1p
 
-          echo ">> launching app for 10s"
+          echo ">> launching app for 15s"
           export YTDL_CONFIG_DIR="$RUNNER_TEMP/ytdl-config"
           "$MACOS/$EXE" > "$RUNNER_TEMP/app.log" 2>&1 &
           PID=$!
-          sleep 10
+          sleep 15
           if kill -0 "$PID" 2>/dev/null; then
-            echo "App is alive after 10s (pid $PID)"
+            echo "App is alive after 15s (pid $PID)"
             kill "$PID"; wait "$PID" 2>/dev/null || true
           else
             RC=0; wait "$PID" || RC=$?
