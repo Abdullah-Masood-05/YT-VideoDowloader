@@ -18,6 +18,7 @@ BUNDLE_ID="com.abdullahmasood.ytdownloader"
 OUT="build_macos"
 ICNS="$OUT/app.icns"
 PYTHON="${PYTHON:-.venv/bin/python}"
+ROOT="$(pwd)"  # PyInstaller resolves relative paths against --specpath
 
 mkdir -p "$OUT"
 [ -f "$ICNS" ] || packaging/macos/make_icns.sh resources/icons/app_source.png "$ICNS"
@@ -28,11 +29,11 @@ rm -rf "$OUT/$APP_NAME.app" "$OUT/$APP_NAME" "$OUT/pyi-work"
   --noconfirm --clean \
   --windowed \
   --name "$APP_NAME" \
-  --icon "$ICNS" \
+  --icon "$ROOT/$ICNS" \
   --osx-bundle-identifier "$BUNDLE_ID" \
   --target-arch arm64 \
-  --add-data "resources/icons/app.png:resources/icons" \
-  --add-data "resources/icons/app.ico:resources/icons" \
+  --add-data "$ROOT/resources/icons/app.png:resources/icons" \
+  --add-data "$ROOT/resources/icons/app.ico:resources/icons" \
   --collect-submodules yt_dlp \
   --collect-data yt_dlp \
   --exclude-module tkinter \
