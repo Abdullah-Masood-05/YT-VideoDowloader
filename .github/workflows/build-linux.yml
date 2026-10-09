@@ -2,7 +2,7 @@ name: Build Linux packages
 
 on:
   push:
-    branches: [main, ci/linux]
+    branches: [main]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
