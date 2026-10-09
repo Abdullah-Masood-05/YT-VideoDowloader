@@ -63,11 +63,13 @@ contents:
     file_info: {mode: 0644}
     packager: deb
 
-# Nuitka bundles Qt and most of its libraries; the ones below are the X11 /
-# OpenGL / D-Bus system libraries Qt expects from the host.
+# Nuitka bundles Qt and most of its libraries; the ones below are the GLib /
+# X11 / OpenGL / D-Bus system libraries Qt expects from the host.
 overrides:
   deb:
     depends:
+      # Ubuntu 24.04+ renamed it for the 64-bit time_t transition.
+      - libglib2.0-0t64 | libglib2.0-0
       - libegl1
       - libgl1
       - libfontconfig1
@@ -99,6 +101,8 @@ overrides:
     # Soname dependencies resolve on both Fedora and openSUSE, whose package
     # names differ.
     depends:
+      - libglib-2.0.so.0()(64bit)
+      - libgthread-2.0.so.0()(64bit)
       - libEGL.so.1()(64bit)
       - libGL.so.1()(64bit)
       - libfontconfig.so.1()(64bit)
@@ -128,6 +132,7 @@ overrides:
       - libwayland-egl.so.1()(64bit)
   archlinux:
     depends:
+      - glib2
       - libglvnd
       - fontconfig
       - freetype2

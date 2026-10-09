@@ -43,6 +43,36 @@ mkdir -p "$OUT"
 
 mv "$OUT/nuitka/main.dist" "$OUT/dist"
 rm -rf "$OUT/nuitka"
+
+# Prune Qt pieces the app never loads and that would otherwise pull in host
+# libraries we do not want to depend on (GTK 3, CUPS, Kerberos) or that the
+# PyQt6 wheel does not even ship (the EGLFS KMS support libraries).
+QT="$OUT/dist/PyQt6/Qt6"
+rm -rf \
+    "$QT/plugins/egldeviceintegrations" \
+    "$QT/plugins/printsupport" \
+    "$QT/plugins/tls" \
+    "$QT/plugins/platforms/libqeglfs.so" \
+    "$QT/plugins/platforms/libqminimalegl.so" \
+    "$QT/plugins/platforms/libqvnc.so" \
+    "$QT/plugins/platforms/libqvkkhrdisplay.so" \
+    "$QT/plugins/platformthemes/libqgtk3.so" \
+    "$QT/plugins/imageformats/libqpdf.so" \
+    "$OUT/dist/libQt6EglFSDeviceIntegration.so.6" \
+    "$OUT/dist/libQt6Network.so.6" \
+    "$OUT/dist/libQt6Pdf.so.6" \
+    "$OUT/dist/libQt6PrintSupport.so.6"
+# Nothing left may still link against what was removed.
+stale=0
+while IFS= read -r -d '' f; do
+    if readelf -d "$f" 2>/dev/null \
+            | grep -qE 'NEEDED.*libQt6(EglFSDeviceIntegration|Network|Pdf|PrintSupport)\.so'; then
+        echo "error: $f still needs a pruned Qt library" >&2
+        stale=1
+    fi
+done < <(find "$OUT/dist" -type f \( -name '*.so*' -o -name "$APP" \) -print0)
+test "$stale" -eq 0
+
 test -x "$OUT/dist/$APP"
 
 "$PYTHON" packaging/linux/make_icons.py resources/icons/app_source.png "$OUT/icons"

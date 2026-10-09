@@ -76,11 +76,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # TEMPORARY: skip until the FFmpeg release is published.
-          if ! gh release view "$FFMPEG_RELEASE" -R "$FFMPEG_REPO" >/dev/null 2>&1; then
-            echo "::warning::$FFMPEG_REPO $FFMPEG_RELEASE not found, packaging WITHOUT ffmpeg"
-            exit 0
-          fi
           mkdir -p "$RUNNER_TEMP/ffmpeg" && cd "$RUNNER_TEMP/ffmpeg"
           gh release download "$FFMPEG_RELEASE" -R "$FFMPEG_REPO" \
             -p ffmpeg-linux-x86_64 -p ffprobe-linux-x86_64 -p SHA256SUMS.txt
@@ -194,8 +189,6 @@ jobs:
 
       - name: Bundled FFmpeg runs
         run: |
-          # TEMPORARY: skip until the FFmpeg release is published.
-          [ -e "/opt/$APP/ffmpeg" ] || { echo "::warning::no bundled ffmpeg"; exit 0; }
           test -x "/opt/$APP/ffmpeg"
           test -x "/opt/$APP/ffprobe"
           "/opt/$APP/ffmpeg" -hide_banner -version | sed -n 1p
